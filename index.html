@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CommitDesk — The Chat-First Work Commitment Tracker</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-[#0b0f17] text-slate-100 h-full flex flex-col font-sans antialiased overflow-hidden selection:bg-emerald-500/30 selection:text-emerald-300">
+
+  <!-- Header -->
+  <header class="h-14 border-b border-[#212936] bg-[#0f1420]/95 backdrop-blur px-5 flex items-center justify-between shrink-0 z-20">
+    <div class="flex items-center space-x-3">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <h1 class="font-bold text-base tracking-tight text-white leading-none">CommitDesk</h1>
+          <span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 rounded-full uppercase tracking-wider">
+            Work Tracker
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-0.5 hidden sm:block">Turns verbal meeting talk into structured Jira-ready tasks</p>
+      </div>
+    </div>
+
+    <!-- Header Actions -->
+    <div class="flex items-center space-x-2.5">
+      <!-- API Key Status Indicator -->
+      <button
+        onclick="window.CommitDeskApp.openSettings()"
+        id="api-key-indicator"
+        class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs bg-slate-900 border border-slate-700/80 text-slate-400 hover:border-slate-500 transition cursor-pointer"
+        title="Configure Gemini API Settings"
+      >
+        <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+        <span class="text-xs text-slate-400">Rule Parser (Local)</span>
+      </button>
+
+      <!-- Settings (Gear) Button -->
+      <button
+        onclick="window.CommitDeskApp.openSettings()"
+        class="p-2 text-slate-400 hover:text-white bg-[#141b27] hover:bg-slate-800 border border-slate-700/80 rounded-lg transition"
+        title="Settings"
+        aria-label="Settings"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      </button>
+
+      <!-- Reset Demo Data Button -->
+      <button
+        onclick="window.CommitDeskApp.resetDemoData()"
+        class="px-2.5 py-1.5 text-xs text-slate-300 hover:text-white bg-[#141b27] hover:bg-slate-800 border border-slate-700/80 rounded-lg transition hidden sm:inline-flex items-center space-x-1"
+        title="Reset to 12 authentic mock commitments"
+      >
+        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span>Reset Demo</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile View Toggle Tabs (Visible only on < lg screens) -->
+  <nav class="flex lg:hidden border-b border-[#212936] bg-[#0c101a] shrink-0">
+    <button
+      id="tab-btn-chat"
+      onclick="window.CommitDeskApp.setMobileTab('chat')"
+      class="flex-1 py-2 text-center text-xs font-semibold text-slate-400 border-b-2 border-transparent"
+    >
+      💬 Chat Assistant
+    </button>
+    <button
+      id="tab-btn-board"
+      onclick="window.CommitDeskApp.setMobileTab('board')"
+      class="flex-1 py-2 text-center text-xs font-semibold text-emerald-400 border-b-2 border-emerald-400 bg-slate-900/60"
+    >
+      📋 Live Task Board
+    </button>
+  </nav>
+
+  <!-- Split Screen Two-Panel Layout (No page scroll, internal scrolling only) -->
+  <main class="flex-1 flex overflow-hidden">
+
+    <!-- LEFT PANEL: Chat Interface (~40% width, min 360px) -->
+    <section
+      id="chat-panel-container"
+      class="w-full lg:w-[40%] min-w-[340px] max-w-none lg:max-w-[500px] border-r border-[#212936] bg-[#0c101a] flex flex-col h-full overflow-hidden shrink-0"
+    >
+      <!-- Chat Sub-header -->
+      <div class="p-3 border-b border-[#212936] bg-[#101624] flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-2">
+          <div class="relative">
+            <div class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-[10px] font-bold">
+              AI
+            </div>
+            <span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full border border-[#0c101a]"></span>
+          </div>
+          <div>
+            <h2 class="text-xs font-semibold text-slate-200">Commitment Assistant</h2>
+            <p class="text-[10px] text-slate-500">Paste transcripts or type promises</p>
+          </div>
+        </div>
+
+        <button
+          onclick="window.CommitDeskApp.clearChatHistory()"
+          class="text-[11px] text-slate-500 hover:text-slate-300 px-2 py-1 rounded hover:bg-slate-800 transition"
+          title="Clear chat stream"
+        >
+          Clear
+        </button>
+      </div>
+
+      <!-- Quick Template Prompt Pills -->
+      <div class="px-3 py-2 border-b border-[#1b2333] bg-[#090d16] flex items-center space-x-2 overflow-x-auto text-[11px] no-scrollbar shrink-0">
+        <span class="text-slate-500 text-[10px] uppercase font-mono tracking-wider shrink-0">Try Sample:</span>
+        <button
+          onclick="window.CommitDeskApp.insertSamplePrompt('standup')"
+          class="shrink-0 px-2.5 py-1 rounded-full bg-[#141b29] hover:bg-[#1e273a] text-slate-300 border border-slate-700/60 transition"
+        >
+          🚀 Standup Commitments
+        </button>
+        <button
+          onclick="window.CommitDeskApp.insertSamplePrompt('incident')"
+          class="shrink-0 px-2.5 py-1 rounded-full bg-[#141b29] hover:bg-[#1e273a] text-slate-300 border border-slate-700/60 transition"
+        >
+          🔥 Post-Incident Actions
+        </button>
+        <button
+          onclick="window.CommitDeskApp.insertSamplePrompt('planning')"
+          class="shrink-0 px-2.5 py-1 rounded-full bg-[#141b29] hover:bg-[#1e273a] text-slate-300 border border-slate-700/60 transition"
+        >
+          📋 Planning Sync
+        </button>
+      </div>
+
+      <!-- Chat Messages Scroll Container -->
+      <div id="chat-messages-container" class="flex-1 overflow-y-auto p-4 space-y-3.5">
+        <!-- Rendered by ChatPanel.js -->
+      </div>
+
+      <!-- Chat Input Area -->
+      <div class="p-3 border-t border-[#212936] bg-[#101624] shrink-0">
+        <form
+          id="chat-input-form"
+          onsubmit="event.preventDefault(); const val = document.getElementById('chat-input-textarea').value; window.CommitDeskApp.submitChatMessage(val); document.getElementById('chat-input-textarea').value = '';"
+          class="relative"
+        >
+          <div class="rounded-xl border border-slate-700/80 bg-[#090d16] focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/30 transition shadow-inner">
+            <textarea
+              id="chat-input-textarea"
+              rows="3"
+              placeholder="Paste meeting notes or type: 'Meera asked me to review rate limiter PR by tomorrow'..."
+              class="w-full bg-transparent px-3.5 pt-2.5 pb-9 text-xs text-slate-200 placeholder-slate-500 focus:outline-none resize-none font-sans"
+              onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('chat-input-form').dispatchEvent(new Event('submit')); }"
+            ></textarea>
+
+            <div class="absolute bottom-2 left-3 right-2 flex items-center justify-between pointer-events-none">
+              <span class="text-[10px] text-slate-500 hidden sm:inline">
+                <kbd class="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 font-mono">Enter</kbd> send, <kbd class="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 font-mono">Shift+Enter</kbd> newline
+              </span>
+              <button
+                type="submit"
+                class="pointer-events-auto px-3.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-medium text-xs shadow-md transition flex items-center space-x-1"
+                aria-label="Send notes to parse"
+              >
+                <span>Send</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: Live Task Board (~60% width) -->
+    <section
+      id="board-panel-container"
+      class="flex-1 bg-[#090d14] flex flex-col h-full overflow-hidden"
+    >
+      <!-- Top Action Strip: Summary Strip + Filter Bar -->
+      <div class="p-3 border-b border-[#212936] bg-[#0d121c] flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <!-- Live Summary Strip (Open, Due Today, Overdue, Completed) -->
+        <div id="summary-strip-container">
+          <!-- Rendered by SummaryStrip.js -->
+        </div>
+
+        <!-- Controls: Search, Priority Filter, Source Filter, View Toggle -->
+        <div class="flex items-center space-x-2 flex-wrap gap-y-2">
+          <!-- Search Box -->
+          <div class="relative">
+            <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              id="board-search-input"
+              oninput="window.CommitDeskApp.setSearchQuery(this.value)"
+              placeholder="Search tasks..."
+              class="w-36 sm:w-44 bg-[#141b27] border border-slate-700/80 rounded-lg pl-8 pr-2.5 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-500"
+            />
+          </div>
+
+          <!-- Priority Filter -->
+          <select
+            onchange="window.CommitDeskApp.setPriorityFilter(this.value)"
+            class="bg-[#141b27] border border-slate-700/80 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none"
+            aria-label="Filter by priority"
+          >
+            <option value="All">All Priorities</option>
+            <option value="High">High Priority</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+          </select>
+
+          <!-- Source Filter -->
+          <select
+            onchange="window.CommitDeskApp.setSourceFilter(this.value)"
+            class="bg-[#141b27] border border-slate-700/80 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none hidden md:block"
+            aria-label="Filter by source"
+          >
+            <option value="All">All Sources</option>
+            <option value="Meeting">Meeting Verbal</option>
+            <option value="Jira">Jira Ticket</option>
+          </select>
+
+          <!-- View Mode Toggle -->
+          <div class="flex bg-[#141b27] rounded-lg p-0.5 border border-slate-700/80">
+            <button
+              id="btn-view-kanban"
+              onclick="window.CommitDeskApp.setViewMode('kanban')"
+              class="px-2.5 py-1 text-xs rounded-md font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+              title="Columns view"
+            >
+              Columns
+            </button>
+            <button
+              id="btn-view-list"
+              onclick="window.CommitDeskApp.setViewMode('list')"
+              class="px-2.5 py-1 text-xs rounded-md font-medium text-slate-400 hover:text-slate-200"
+              title="List view"
+            >
+              List
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Task Board Content Area (Kanban lanes scroll internally) -->
+      <div id="board-container" class="flex-1 overflow-x-auto overflow-y-auto p-4">
+        <!-- Rendered by TaskBoard.js -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modals Host -->
+  <div id="settings-modal-host"></div>
+
+  <!-- Task Edit / Create Modal -->
+  <div
+    id="task-edit-modal"
+    class="fixed inset-0 bg-black/75 backdrop-blur-sm hidden items-center justify-center z-50 p-4"
+    onclick="if(event.target === this) window.CommitDeskApp.closeEditModal()"
+  >
+    <div class="bg-[#121824] border border-slate-700 rounded-2xl max-w-lg w-full p-5 shadow-2xl relative text-slate-100">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 id="edit-task-modal-title" class="font-bold text-sm text-slate-100">Edit Task Commitment</h3>
+        <button
+          onclick="window.CommitDeskApp.closeEditModal()"
+          class="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800 transition"
+          aria-label="Close modal"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <form id="task-edit-form" onsubmit="window.CommitDeskApp.saveTaskForm(event)" class="py-4 space-y-3.5 text-xs">
+        <input type="hidden" id="edit-task-id" />
+
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">Title *</label>
+          <input
+            type="text"
+            id="edit-task-title"
+            required
+            class="w-full bg-[#0a0e16] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">Short Description *</label>
+          <textarea
+            id="edit-task-desc"
+            rows="2"
+            required
+            class="w-full bg-[#0a0e16] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+          ></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-medium text-slate-300 mb-1">Requester *</label>
+            <input
+              type="text"
+              id="edit-task-requester"
+              required
+              placeholder="e.g. Meera Iyer"
+              class="w-full bg-[#0a0e16] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+          <div>
+            <label class="block font-medium text-slate-300 mb-1">Due Date (ISO) *</label>
+            <input
+              type="date"
+              id="edit-task-duedate"
+              required
+              class="w-full bg-[#0a0e16] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2.5">
+          <div>
+            <label class="block font-medium text-slate-300 mb-1">Priority</label>
+            <select id="edit-task-priority" class="w-full bg-[#0a0e16] border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-100 focus:outline-none">
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-medium text-slate-300 mb-1">Effort</label>
+            <select id="edit-task-effort" class="w-full bg-[#0a0e16] border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-100 focus:outline-none">
+              <option value="Small">Small</option>
+              <option value="Medium">Medium</option>
+              <option value="Large">Large</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-medium text-slate-300 mb-1">Status</label>
+            <select id="edit-task-status" class="w-full bg-[#0a0e16] border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-100 focus:outline-none">
+              <option value="To Do">To Do</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Done">Done</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-medium text-slate-300 mb-1">Source</label>
+            <select id="edit-task-source" class="w-full bg-[#0a0e16] border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-100 focus:outline-none">
+              <option value="Meeting">Meeting</option>
+              <option value="Jira">Jira</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-3 border-t border-slate-800">
+          <button
+            type="button"
+            onclick="window.CommitDeskApp.closeEditModal()"
+            class="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 text-xs transition"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-md shadow-emerald-700/20 transition"
+          >
+            Save Task
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Root -->
+  <div id="toast-root" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- Main Application Entrypoint -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
