@@ -105,7 +105,8 @@ export function parseMeetingNotesLocal(text) {
       effort,
       status: 'To Do',
       source: 'Meeting',
-      createdAt: todayStr
+      createdAt: todayStr,
+      completedAt: null
     });
   });
 

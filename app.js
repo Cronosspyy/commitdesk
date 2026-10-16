@@ -1,10 +1,12 @@
 /**
  * CommitDesk — Main Application Orchestrator
  * High-performance, front-end-only work commitment tracker.
+ * CR-021: Integrated intent routing, query_today, query_quick_wins, task completion.
  */
 import { Storage } from './src/utils/storage.js';
 import { getTodayISO, getRelativeDateISO } from './src/utils/dates.js';
 import { parseMeetingNotesWithAI } from './src/utils/geminiParser.js';
+import { executeQueryToday, executeQueryQuickWins, findTaskToComplete } from './src/utils/taskQueries.js';
 import { renderSummaryStrip } from './src/components/SummaryStrip.js';
 import { renderTaskBoard } from './src/components/TaskBoard.js';
 import { renderChatMessages } from './src/components/ChatPanel.js';
@@ -30,7 +32,8 @@ function createDefaultSeedTasks() {
       effort: 'Medium',
       status: 'To Do',
       source: 'Jira',
-      createdAt: getRelativeDateISO(-3)
+      createdAt: getRelativeDateISO(-3),
+      completedAt: null
     },
     {
       id: 'SEC-109',
@@ -42,7 +45,8 @@ function createDefaultSeedTasks() {
       effort: 'Small',
       status: 'In Progress',
       source: 'Jira',
-      createdAt: getRelativeDateISO(-4)
+      createdAt: getRelativeDateISO(-4),
+      completedAt: null
     },
     {
       id: 'COMMIT-103',
@@ -54,7 +58,8 @@ function createDefaultSeedTasks() {
       effort: 'Small',
       status: 'To Do',
       source: 'Meeting',
-      createdAt: getRelativeDateISO(-1)
+      createdAt: getRelativeDateISO(-1),
+      completedAt: null
     },
     {
       id: 'COMMIT-104',
@@ -66,7 +71,8 @@ function createDefaultSeedTasks() {
       effort: 'Medium',
       status: 'In Progress',
       source: 'Meeting',
-      createdAt: getRelativeDateISO(-1)
+      createdAt: getRelativeDateISO(-1),
+      completedAt: null
     },
     {
       id: 'BILL-319',
@@ -78,7 +84,8 @@ function createDefaultSeedTasks() {
       effort: 'Medium',
       status: 'To Do',
       source: 'Jira',
-      createdAt: getRelativeDateISO(-2)
+      createdAt: getRelativeDateISO(-2),
+      completedAt: null
     },
     {
       id: 'COMMIT-106',
@@ -90,7 +97,8 @@ function createDefaultSeedTasks() {
       effort: 'Large',
       status: 'In Progress',
       source: 'Meeting',
-      createdAt: getRelativeDateISO(-1)
+      createdAt: getRelativeDateISO(-1),
+      completedAt: null
     },
     {
       id: 'DATA-204',
@@ -102,7 +110,8 @@ function createDefaultSeedTasks() {
       effort: 'Medium',
       status: 'To Do',
       source: 'Jira',
-      createdAt: getRelativeDateISO(-2)
+      createdAt: getRelativeDateISO(-2),
+      completedAt: null
     },
     {
       id: 'COMMIT-108',
@@ -114,7 +123,8 @@ function createDefaultSeedTasks() {
       effort: 'Small',
       status: 'To Do',
       source: 'Meeting',
-      createdAt: getRelativeDateISO(-1)
+      createdAt: getRelativeDateISO(-1),
+      completedAt: null
     },
     {
       id: 'FRONT-891',
@@ -126,7 +136,8 @@ function createDefaultSeedTasks() {
       effort: 'Large',
       status: 'To Do',
       source: 'Jira',
-      createdAt: getRelativeDateISO(-3)
+      createdAt: getRelativeDateISO(-3),
+      completedAt: null
     },
     {
       id: 'COMMIT-110',
@@ -138,31 +149,34 @@ function createDefaultSeedTasks() {
       effort: 'Small',
       status: 'To Do',
       source: 'Meeting',
-      createdAt: getRelativeDateISO(-2)
+      createdAt: getRelativeDateISO(-2),
+      completedAt: null
     },
     {
       id: 'COMMIT-111',
       title: 'Align on GraphQL cursor pagination spec with iOS team',
       description: 'Agreed on Relay-compatible connection schema for feed query endpoints.',
-      dueDate: getRelativeDateISO(-3), // Done task (no overdue alert)
+      dueDate: getRelativeDateISO(-3), // Done task
       requester: 'Sofia Alvarez (Head of Product)',
       priority: 'Medium',
       effort: 'Medium',
       status: 'Done',
       source: 'Meeting',
-      createdAt: getRelativeDateISO(-5)
+      createdAt: getRelativeDateISO(-5),
+      completedAt: getRelativeDateISO(-1)
     },
     {
       id: 'OPS-512',
       title: 'Provision production Redis ElastiCache cluster with multi-AZ failover',
       description: 'Configured Terraform module with in-transit TLS encryption and automatic snapshot lifecycle.',
-      dueDate: getRelativeDateISO(-4), // Done task (no overdue alert)
+      dueDate: getRelativeDateISO(-4), // Done task
       requester: 'Arjun Nair (SecOps Lead)',
       priority: 'High',
       effort: 'Large',
       status: 'Done',
       source: 'Jira',
-      createdAt: getRelativeDateISO(-7)
+      createdAt: getRelativeDateISO(-7),
+      completedAt: getRelativeDateISO(-2)
     }
   ];
 }
@@ -171,27 +185,20 @@ const DEFAULT_WELCOME_CHAT = [
   {
     id: 'msg-welcome',
     role: 'assistant',
-    text: "👋 Welcome to **CommitDesk**!\n\nI capture verbally assigned meeting commitments that normally get lost before reaching Jira. Type or paste any meeting notes, bullet points, or raw Slack chat. I will parse them into structured tasks on your live board with deadlines, owners, and effort ratings.",
+    text: "👋 Welcome to **CommitDesk**!\n\nI capture verbal meeting commitments and help you deliver your work. You can:\n• **Add tasks:** Paste meeting notes or type promises (e.g. *\"Meera asked me to review PR by tomorrow\"*)\n• **Daily Agenda:** Ask *\"What do I need to deliver today?\"*\n• **Quick Wins:** Ask *\"I have one hour, give me the low-hanging fruit\"*\n• **Complete tasks:** Say *\"I finished the pricing deck\"*",
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 ];
 
 // Sample prompt templates for 1-click testing
 const SAMPLE_PROMPTS = {
+  deliverToday: 'What do I need to deliver today?',
+  quickWins: 'I have one hour, give me the low-hanging fruit',
+  completePricing: 'I finished the pricing deck for Meera',
   standup: `Sprint standup notes:
 - Meera asked me to send the revised Q4 pricing deck by today EOD (high priority)
 - Need to review Arjun's PR on rate limiter before tomorrow morning
-- Draft architecture doc for the notifications service by Friday (Daniel Kim will review)`,
-
-  incident: `Urgent incident response items:
-- Rotate all database root credentials immediately (requested by Arjun Nair)
-- Elena Rostova wants an updated Stripe webhook retry test by today
-- Write post-mortem customer incident review by tomorrow EOD`,
-
-  planning: `Quarterly alignment sync:
-- Sofia requested a 30-min customer interview with Acme Corp by next week
-- Patch the CVE vulnerability in authentication proxy before Friday (Priya Sharma requested)
-- Check in with iOS team regarding GraphQL cursor pagination by tomorrow`
+- Draft architecture doc for the notifications service by Friday (Daniel Kim will review)`
 };
 
 // Application State
@@ -210,6 +217,7 @@ class CommitDeskState {
     this.newlyAddedIds = new Set();
     this.isParsing = false;
     this.isSettingsOpen = false;
+    this.pendingDisambiguation = null; // Holds { candidates: [tasks] } for multi-match completion
   }
 
   init() {
@@ -222,7 +230,11 @@ class CommitDeskState {
     // 1. Tasks
     const storedTasks = Storage.getJSON(STORAGE_KEYS.TASKS);
     if (storedTasks && Array.isArray(storedTasks) && storedTasks.length > 0) {
-      this.tasks = storedTasks;
+      // Ensure all loaded tasks have completedAt field
+      this.tasks = storedTasks.map(t => ({
+        ...t,
+        completedAt: t.completedAt !== undefined ? t.completedAt : (t.status === 'Done' ? getTodayISO() : null)
+      }));
     } else {
       this.tasks = createDefaultSeedTasks();
       this.saveTasks();
@@ -357,44 +369,187 @@ class CommitDeskState {
     });
     this.saveChat();
 
-    this.isParsing = true;
-    this.renderChat();
+    // 1. Check if user is replying to a disambiguation prompt
+    if (this.pendingDisambiguation && Array.isArray(this.pendingDisambiguation.candidates)) {
+      const candidates = this.pendingDisambiguation.candidates;
+      let matchedCandidate = null;
 
-    try {
-      // Call Gemini 2.5 Flash (with automatic fallback to local heuristic engine)
-      const parseResult = await parseMeetingNotesWithAI(cleanText, this.geminiApiKey);
-      const createdTasks = parseResult.tasks || [];
+      const numVal = parseInt(cleanText, 10);
+      if (!isNaN(numVal) && numVal >= 1 && numVal <= candidates.length) {
+        matchedCandidate = candidates[numVal - 1];
+      } else {
+        const lowerInput = cleanText.toLowerCase();
+        matchedCandidate = candidates.find(c =>
+          c.id.toLowerCase() === lowerInput ||
+          c.title.toLowerCase().includes(lowerInput)
+        );
+      }
 
-      if (createdTasks.length > 0) {
-        // Prepend new tasks to board
-        this.tasks = [...createdTasks, ...this.tasks];
+      if (matchedCandidate) {
+        this.pendingDisambiguation = null;
+        matchedCandidate.status = 'Done';
+        matchedCandidate.completedAt = new Date().toISOString();
         this.saveTasks();
 
-        // Highlight newly created tasks
-        this.newlyAddedIds = new Set(createdTasks.map(t => t.id));
+        // Highlight completed card on board immediately
+        this.newlyAddedIds = new Set([matchedCandidate.id]);
         setTimeout(() => {
           this.newlyAddedIds.clear();
           this.renderBoard();
         }, 3500);
 
-        // Assistant reply with details of created commitments
         this.chatMessages.push({
           id: `ai-${Date.now()}`,
           role: 'assistant',
-          text: `Extracted **${createdTasks.length} task${createdTasks.length === 1 ? '' : 's'}** and placed on your live board:\n\n${createdTasks.map(t => `• **${t.title}** (Due: ${t.dueDate}, ${t.priority} Priority, ${t.effort} Effort, Req: ${t.requester})`).join('\n')}\n\n_${parseResult.message}_`,
-          createdTasks: createdTasks,
-          sourceUsed: parseResult.sourceUsed,
+          text: `✅ Marked **${matchedCandidate.title}** (${matchedCandidate.id}) as **Done**! It has moved to the Done column on your board.`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
 
-        this.showToast(`Created ${createdTasks.length} task${createdTasks.length === 1 ? '' : 's'} on board!`, 'success');
+        this.showToast(`Completed ${matchedCandidate.id}!`, 'success');
+        this.saveChat();
+        this.render();
+        return;
       } else {
+        // Disambiguation did not match, clear and continue to intent router
+        this.pendingDisambiguation = null;
+      }
+    }
+
+    this.isParsing = true;
+    this.renderChat();
+
+    try {
+      // Call Gemini (with automatic fallback to local intent router)
+      const parseResult = await parseMeetingNotesWithAI(cleanText, this.geminiApiKey);
+      const intent = parseResult.intent || 'create_tasks';
+
+      // 2. Route by Intent
+      if (intent === 'query_today') {
+        const replyText = executeQueryToday(this.tasks);
         this.chatMessages.push({
           id: `ai-${Date.now()}`,
           role: 'assistant',
-          text: `I couldn't identify explicit commitments or actionable deliverables in that text. Try mentioning an action verb (e.g. "Draft RFC", "Review PR"), an owner, or a deadline like "by Friday" or "today".`,
+          text: replyText,
+          sourceUsed: parseResult.sourceUsed,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
+      } else if (intent === 'query_quick_wins') {
+        const replyText = executeQueryQuickWins(this.tasks, parseResult.timeBudgetMinutes);
+        this.chatMessages.push({
+          id: `ai-${Date.now()}`,
+          role: 'assistant',
+          text: replyText,
+          sourceUsed: parseResult.sourceUsed,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+      } else if (intent === 'complete_task') {
+        const matchResult = findTaskToComplete(this.tasks, parseResult.completionQuery || cleanText);
+
+        if (matchResult.type === 'exact') {
+          const task = matchResult.task;
+          task.status = 'Done';
+          task.completedAt = new Date().toISOString();
+          this.saveTasks();
+
+          // Highlight completed card on board immediately
+          this.newlyAddedIds = new Set([task.id]);
+          setTimeout(() => {
+            this.newlyAddedIds.clear();
+            this.renderBoard();
+          }, 3500);
+
+          this.chatMessages.push({
+            id: `ai-${Date.now()}`,
+            role: 'assistant',
+            text: `✅ Marked **${task.title}** (${task.id}) as **Done**! It has moved to the Done column on your board.`,
+            sourceUsed: parseResult.sourceUsed,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+          this.showToast(`Completed ${task.id}!`, 'success');
+        } else if (matchResult.type === 'already_done') {
+          this.chatMessages.push({
+            id: `ai-${Date.now()}`,
+            role: 'assistant',
+            text: `ℹ️ **${matchResult.task.title}** (${matchResult.task.id}) is already marked as **Done** on your board.`,
+            sourceUsed: parseResult.sourceUsed,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        } else if (matchResult.type === 'ambiguous') {
+          this.pendingDisambiguation = { candidates: matchResult.candidates };
+          const candidateList = matchResult.candidates
+            .map((c, i) => `${i + 1}. **${c.title}** (${c.id}) — Req: ${c.requester}`)
+            .join('\n');
+
+          this.chatMessages.push({
+            id: `ai-${Date.now()}`,
+            role: 'assistant',
+            text: `I found multiple open tasks matching that. Which one did you mean?\n\n${candidateList}\n\nReply with the number (e.g. **1**) or task ID to complete it.`,
+            sourceUsed: parseResult.sourceUsed,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        } else if (matchResult.type === 'no_match') {
+          let suggestionsText = '';
+          if (matchResult.suggestions && matchResult.suggestions.length > 0) {
+            suggestionsText = `\n\nDid you mean one of these open tasks?\n` +
+              matchResult.suggestions.map(s => `• **${s.title}** (${s.id})`).join('\n');
+          }
+          this.chatMessages.push({
+            id: `ai-${Date.now()}`,
+            role: 'assistant',
+            text: `No open task matches that description.${suggestionsText}`,
+            sourceUsed: parseResult.sourceUsed,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        } else {
+          this.chatMessages.push({
+            id: `ai-${Date.now()}`,
+            role: 'assistant',
+            text: matchResult.message || 'No matching open task found.',
+            sourceUsed: parseResult.sourceUsed,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        }
+      } else if (intent === 'general') {
+        this.chatMessages.push({
+          id: `ai-${Date.now()}`,
+          role: 'assistant',
+          text: `👋 Hi! I'm your **CommitDesk Assistant**. Here is what you can ask me to do:\n\n• **Capture tasks:** Type or paste meeting notes/Slack text (e.g., *"Meera asked me to review PR by tomorrow"*)\n• **Daily Agenda:** Ask *"What do I need to deliver today?"* or *"What's overdue?"*\n• **Low-Hanging Fruit:** Ask *"I have one hour, give me the low-hanging fruit"*\n• **Complete work:** Say *"I finished the pricing deck"* or *"Done with PLAT-482"*`,
+          sourceUsed: parseResult.sourceUsed,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+      } else {
+        // Default: create_tasks
+        const createdTasks = parseResult.tasks || [];
+
+        if (createdTasks.length > 0) {
+          this.tasks = [...createdTasks, ...this.tasks];
+          this.saveTasks();
+
+          // Highlight newly created tasks
+          this.newlyAddedIds = new Set(createdTasks.map(t => t.id));
+          setTimeout(() => {
+            this.newlyAddedIds.clear();
+            this.renderBoard();
+          }, 3500);
+
+          this.chatMessages.push({
+            id: `ai-${Date.now()}`,
+            role: 'assistant',
+            text: `Extracted **${createdTasks.length} task${createdTasks.length === 1 ? '' : 's'}** and placed on your live board:\n\n${createdTasks.map(t => `• **${t.title}** (Due: ${t.dueDate}, ${t.priority} Priority, ${t.effort} Effort, Req: ${t.requester})`).join('\n')}\n\n_${parseResult.message}_`,
+            createdTasks: createdTasks,
+            sourceUsed: parseResult.sourceUsed,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+
+          this.showToast(`Created ${createdTasks.length} task${createdTasks.length === 1 ? '' : 's'} on board!`, 'success');
+        } else {
+          this.chatMessages.push({
+            id: `ai-${Date.now()}`,
+            role: 'assistant',
+            text: `I couldn't identify explicit commitments or actionable deliverables in that text. Try mentioning an action verb (e.g. "Draft RFC", "Review PR"), an owner, or a deadline like "by Friday" or "today".`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        }
       }
     } catch (err) {
       console.error('[CommitDesk] Chat processing error:', err);
@@ -419,7 +574,6 @@ class CommitDeskState {
     if (textarea && prompt) {
       textarea.value = prompt;
       textarea.focus();
-      // Auto-resize
       textarea.style.height = 'auto';
       textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
     }
@@ -431,6 +585,7 @@ class CommitDeskState {
     if (!task) return;
 
     task.status = newStatus;
+    task.completedAt = newStatus === 'Done' ? new Date().toISOString() : null;
     this.saveTasks();
     this.renderSummaryStrip();
     this.renderBoard();
@@ -505,11 +660,7 @@ class CommitDeskState {
   toggleKeyVisibility() {
     const input = document.getElementById('gemini-key-input');
     if (!input) return;
-    if (input.type === 'password') {
-      input.type = 'text';
-    } else {
-      input.type = 'password';
-    }
+    input.type = input.type === 'password' ? 'text' : 'password';
   }
 
   resetDemoData() {
@@ -640,6 +791,7 @@ class CommitDeskState {
         task.effort = effort;
         task.status = status;
         task.source = source;
+        task.completedAt = status === 'Done' ? (task.completedAt || new Date().toISOString()) : null;
         this.showToast(`Updated ${task.id}`, 'success');
       }
     } else {
@@ -654,7 +806,8 @@ class CommitDeskState {
         effort,
         status,
         source,
-        createdAt: getTodayISO()
+        createdAt: getTodayISO(),
+        completedAt: status === 'Done' ? new Date().toISOString() : null
       });
       this.showToast(`Created task ${newId}`, 'success');
     }

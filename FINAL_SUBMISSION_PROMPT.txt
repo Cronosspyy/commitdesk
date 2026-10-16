@@ -1,0 +1,46 @@
+You are a senior front-end engineer at Google. Build "CommitDesk", a single-page, front-end-only web app that turns meeting talk into tracked tasks. Deliver a complete, working, production-ready app that deploys to Vercel as a static site and loads with zero console errors on a fresh tab.
+
+## PRODUCT IDEA & MISSION
+Work gets assigned verbally in meetings ("send this email, draft that architecture, review a PR") and never reaches Jira. CommitDesk fixes this: the user types or pastes anything from a meeting (a summary, a sentence, a bullet list) into a chat, and the assistant instantly creates structured tasks on a live board. The chat is the primary interface; the board is the result.
+
+## HARD CONSTRAINTS
+1. Front-end only: No backend, no server code, no database, no login/auth, no third-party storage service.
+2. All data lives in browser localStorage (with an in-memory fallback if localStorage is unavailable). Wrap every localStorage read/write in try/catch.
+3. NEVER hard-code the Gemini API key anywhere. Provide a Settings panel with a password-type input where the user pastes their own key. Store it only in localStorage. Include a "Clear key" button.
+4. No placeholder or lorem ipsum content anywhere. Every task must read like a real commitment.
+5. Build core functionality first (chat + board working together), then style. Keep the UI clean, professional, and dark-themed.
+
+## LAYOUT & RESPONSIVENESS
+- Single screen, two panels side by side on desktop: Chat panel on the left (~40%), live Task Board on the right (~60%). No page-level scrolling; each panel scrolls internally.
+- On narrow screens, support tab toggle (Chat | Task Board).
+- Header: app name "CommitDesk", Settings (gear) button, and "Reset demo data" button.
+
+## DATA MODEL
+Each task has exactly these fields:
+{ id, title, description, dueDate (ISO date), requester (person name), priority ("High" | "Medium" | "Low"), effort ("Small" | "Medium" | "Large"), status ("To Do" | "In Progress" | "Done"), source ("Jira" | "Meeting"), createdAt }
+
+## PRE-LOADED MOCK DATA (12 REALISTIC COMMITMENTS)
+Seed on first load if localStorage is empty. A realistic mix of Jira engineering tickets and verbal meeting commitments with authentic global/Indian names (Meera Iyer, Arjun Nair, Sofia Alvarez, Daniel Kim, Elena Rostova, Marcus Vance, Priya Sharma, Siddharth Nair). Compute due dates relative to today so the board always shows:
+- 2 Overdue tasks (dueDate < today && status != Done)
+- 3 Due Today tasks (dueDate == today && status != Done)
+- 5 Upcoming tasks (dueDate > today)
+- 2 Completed tasks (status == Done, with neither overdue nor due-today badges)
+
+## CHAT PANEL WORKFLOW
+- Message stream (user + assistant bubbles), multiline auto-resizing input, Send button, Enter to send and Shift+Enter for newline.
+- Clickable sample prompts (Standup, Post-Incident, Planning Sync) to test parsing in 1 click.
+- When the user sends text, the assistant extracts commitments immediately, updates board state, and confirms with a breakdown card (title, due date, priority, effort).
+- Resolves natural language relative dates ("today", "tomorrow", "by Friday", "next week", "EOD") relative to current date.
+- Shows typing/loading state and never crashes on malformed input.
+
+## SMART PARSING (GEMINI 2.5 FLASH WITH LOCAL FALLBACK)
+- Uses Gemini REST API with user's key: model gemini-2.5-flash via https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent and x-goog-api-key header.
+- Structured JSON output with responseSchema for guaranteed schema compliance.
+- Fallback: If no API key is configured or network fails, a local rule-based NLP parser parses verbs, names, dates, and urgency keywords, ensuring the app always functions seamlessly.
+
+## TASK BOARD & SUMMARY STRIP
+- Kanban lanes: To Do | In Progress | Done.
+- Task cards show title, short description, requester, due date, priority badge, effort pill, and source badge (Jira/Meeting).
+- Live Summary Strip: Open, Due Today, Overdue, and Completed count pills.
+- Red "Overdue" badge and amber "Due today" badge for active tasks.
+- Card actions: status dropdown, inline edit modal, and delete button. Newly added tasks highlight on creation.

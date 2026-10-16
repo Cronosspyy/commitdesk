@@ -1,33 +1,33 @@
 /**
- * Gemini 2.5 Flash Structured Parser Client with Local Fallback
+ * Gemini 2.5 Flash Structured Parser & Intent Classifier with Local Fallback (CR-021)
  */
 import { getTodayISO } from './dates.js';
-import { parseMeetingNotesLocal } from './localParser.js';
+import { routeIntentLocal } from './intentRouter.js';
 
 export async function parseMeetingNotesWithAI(text, apiKey) {
   const todayStr = getTodayISO();
 
   // If no API key provided, immediately use local fallback
   if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-    const localTasks = parseMeetingNotesLocal(text);
+    const localResult = routeIntentLocal(text);
     return {
-      tasks: localTasks,
+      ...localResult,
       sourceUsed: 'fallback',
-      message: 'Extracted tasks using the local rule-based parser. (Add your Gemini API key in Settings for semantic reasoning).'
+      message: 'Processed using local parser.'
     };
   }
 
   const cleanKey = apiKey.trim();
   const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
-  const systemInstruction = `You extract actionable tasks from meeting notes. Return only tasks that are real commitments. Today's date is ${todayStr}. Resolve relative dates. Use enums exactly as specified.`;
+  const systemInstruction = `Classify the user's message and extract structured data. Today's date is ${todayStr}. For complete_task, put the name of the finished work in completionQuery. Return JSON only.`;
 
   const promptBody = {
     contents: [
       {
         parts: [
           {
-            text: `Extract structured work commitments from the following meeting conversation:\n\n${text}`
+            text: `User message:\n\n${text}`
           }
         ]
       }
@@ -44,6 +44,12 @@ export async function parseMeetingNotesWithAI(text, apiKey) {
       responseSchema: {
         type: 'OBJECT',
         properties: {
+          intent: {
+            type: 'STRING',
+            enum: ['create_tasks', 'query_today', 'query_quick_wins', 'complete_task', 'general']
+          },
+          completionQuery: { type: 'STRING' },
+          timeBudgetMinutes: { type: 'INTEGER' },
           tasks: {
             type: 'ARRAY',
             items: {
@@ -70,7 +76,7 @@ export async function parseMeetingNotesWithAI(text, apiKey) {
             }
           }
         },
-        required: ['tasks']
+        required: ['intent']
       }
     }
   };
@@ -88,12 +94,12 @@ export async function parseMeetingNotesWithAI(text, apiKey) {
     if (!response.ok) {
       const errorJson = await response.json().catch(() => ({}));
       const errorMsg = errorJson.error?.message || `HTTP ${response.status}`;
-      console.warn(`[CommitDesk Gemini API] Request failed (${errorMsg}), dropping back to local parser.`);
-      const fallbackTasks = parseMeetingNotesLocal(text);
+      console.warn(`[CommitDesk Gemini API] Request failed (${errorMsg}), using local intent router.`);
+      const localResult = routeIntentLocal(text);
       return {
-        tasks: fallbackTasks,
+        ...localResult,
         sourceUsed: 'fallback',
-        message: `Gemini API returned (${errorMsg}). Extracted tasks using local parser.`
+        message: `Gemini API returned (${errorMsg}). Processed using local router.`
       };
     }
 
@@ -105,46 +111,54 @@ export async function parseMeetingNotesWithAI(text, apiKey) {
     }
 
     const parsedData = JSON.parse(candidateText);
-    const rawList = Array.isArray(parsedData.tasks) ? parsedData.tasks : [];
+    const validIntent = ['create_tasks', 'query_today', 'query_quick_wins', 'complete_task', 'general'].includes(parsedData.intent)
+      ? parsedData.intent
+      : 'create_tasks';
 
-    // Sanitize and validate every task strictly against data model
-    const sanitizedTasks = rawList.map((item, idx) => {
-      const validPriority = ['High', 'Medium', 'Low'].includes(item.priority) ? item.priority : 'Medium';
-      const validEffort = ['Small', 'Medium', 'Large'].includes(item.effort) ? item.effort : 'Medium';
-      const validStatus = ['To Do', 'In Progress', 'Done'].includes(item.status) ? item.status : 'To Do';
+    // Sanitize tasks if intent is create_tasks
+    let sanitizedTasks = [];
+    if (validIntent === 'create_tasks' && Array.isArray(parsedData.tasks)) {
+      sanitizedTasks = parsedData.tasks.map((item, idx) => {
+        const validPriority = ['High', 'Medium', 'Low'].includes(item.priority) ? item.priority : 'Medium';
+        const validEffort = ['Small', 'Medium', 'Large'].includes(item.effort) ? item.effort : 'Medium';
+        const validStatus = ['To Do', 'In Progress', 'Done'].includes(item.status) ? item.status : 'To Do';
 
-      // Validate YYYY-MM-DD date format
-      let validDueDate = item.dueDate;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(validDueDate || '')) {
-        validDueDate = todayStr;
-      }
+        let validDueDate = item.dueDate;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(validDueDate || '')) {
+          validDueDate = todayStr;
+        }
 
-      return {
-        id: `COMMIT-${Date.now().toString().slice(-4)}${idx + 1}`,
-        title: (item.title || 'Actionable Commitment').trim(),
-        description: (item.description || item.title || '').trim(),
-        dueDate: validDueDate,
-        requester: (item.requester || 'Me').trim(),
-        priority: validPriority,
-        effort: validEffort,
-        status: validStatus,
-        source: 'Meeting',
-        createdAt: todayStr
-      };
-    });
+        return {
+          id: `COMMIT-${Date.now().toString().slice(-4)}${idx + 1}`,
+          title: (item.title || 'Actionable Commitment').trim(),
+          description: (item.description || item.title || '').trim(),
+          dueDate: validDueDate,
+          requester: (item.requester || 'Me').trim(),
+          priority: validPriority,
+          effort: validEffort,
+          status: validStatus,
+          source: 'Meeting',
+          createdAt: todayStr,
+          completedAt: null
+        };
+      });
+    }
 
     return {
+      intent: validIntent,
       tasks: sanitizedTasks,
+      completionQuery: parsedData.completionQuery || null,
+      timeBudgetMinutes: parsedData.timeBudgetMinutes || null,
       sourceUsed: 'gemini',
-      message: `Extracted ${sanitizedTasks.length} task${sanitizedTasks.length === 1 ? '' : 's'} using Gemini 2.5 Flash.`
+      message: `Processed intent: ${validIntent} with Gemini 2.5 Flash.`
     };
   } catch (error) {
     console.error('[CommitDesk Gemini API] Parsing error:', error);
-    const fallbackTasks = parseMeetingNotesLocal(text);
+    const localResult = routeIntentLocal(text);
     return {
-      tasks: fallbackTasks,
+      ...localResult,
       sourceUsed: 'fallback',
-      message: `Encountered network error (${error.message}). Extracted tasks using local parser.`
+      message: `Network error (${error.message}). Processed using local router.`
     };
   }
 }

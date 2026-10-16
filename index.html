@@ -139,24 +139,34 @@
 
       <!-- Quick Template Prompt Pills -->
       <div class="px-3 py-2 border-b border-[#1b2333] bg-[#090d16] flex items-center space-x-2 overflow-x-auto text-[11px] no-scrollbar shrink-0">
-        <span class="text-slate-500 text-[10px] uppercase font-mono tracking-wider shrink-0">Try Sample:</span>
+        <span class="text-slate-500 text-[10px] uppercase font-mono tracking-wider shrink-0">Try Query:</span>
         <button
+          type="button"
+          onclick="window.CommitDeskApp.insertSamplePrompt('deliverToday')"
+          class="shrink-0 px-2.5 py-1 rounded-full bg-[#141b29] hover:bg-[#1e273a] text-slate-300 border border-slate-700/60 transition"
+        >
+          ⚡ What's due today?
+        </button>
+        <button
+          type="button"
+          onclick="window.CommitDeskApp.insertSamplePrompt('quickWins')"
+          class="shrink-0 px-2.5 py-1 rounded-full bg-[#141b29] hover:bg-[#1e273a] text-slate-300 border border-slate-700/60 transition"
+        >
+          ⏱️ 1-hour quick wins
+        </button>
+        <button
+          type="button"
+          onclick="window.CommitDeskApp.insertSamplePrompt('completePricing')"
+          class="shrink-0 px-2.5 py-1 rounded-full bg-[#141b29] hover:bg-[#1e273a] text-slate-300 border border-slate-700/60 transition"
+        >
+          ✅ Finished pricing deck
+        </button>
+        <button
+          type="button"
           onclick="window.CommitDeskApp.insertSamplePrompt('standup')"
           class="shrink-0 px-2.5 py-1 rounded-full bg-[#141b29] hover:bg-[#1e273a] text-slate-300 border border-slate-700/60 transition"
         >
-          🚀 Standup Commitments
-        </button>
-        <button
-          onclick="window.CommitDeskApp.insertSamplePrompt('incident')"
-          class="shrink-0 px-2.5 py-1 rounded-full bg-[#141b29] hover:bg-[#1e273a] text-slate-300 border border-slate-700/60 transition"
-        >
-          🔥 Post-Incident Actions
-        </button>
-        <button
-          onclick="window.CommitDeskApp.insertSamplePrompt('planning')"
-          class="shrink-0 px-2.5 py-1 rounded-full bg-[#141b29] hover:bg-[#1e273a] text-slate-300 border border-slate-700/60 transition"
-        >
-          📋 Planning Sync
+          🚀 Standup notes
         </button>
       </div>
 
