@@ -5,9 +5,6 @@
   "description": "CommitDesk — The Chat-First Work Commitment Tracker",
   "type": "module",
   "scripts": {
-    "dev": "npx serve .",
-    "start": "npx serve .",
-    "build": "echo 'Static production ready. Output directory is root.'"
-  },
-  "keywords": ["commitdesk", "hackathon", "gemini", "task-tracker"]
+    "dev": "npx serve ."
+  }
 }
